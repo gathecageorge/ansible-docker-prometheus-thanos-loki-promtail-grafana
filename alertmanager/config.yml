@@ -1,0 +1,14 @@
+route:
+  group_by: ['instance', 'severity']
+  routes:
+  - match:
+      alertname: rabbitmqDown
+  receiver: 'tranque-slack-hook'
+
+receivers:
+- name: 'tranque-slack-hook'
+  slack_configs:
+  - api_url: "https://hooks.slack.com/services/your-slack-hook"
+    title: "{{ .CommonAnnotations.summary }}"
+    title_link: ""
+    text: "RabbitMQ server got down for 10 seconds"

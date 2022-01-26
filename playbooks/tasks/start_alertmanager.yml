@@ -1,0 +1,42 @@
+- name: Start alertmanager
+  hosts: "all"
+  gather_facts: true
+  tasks:
+    - name: Creates alertmanager config dir
+      file:
+        path: "{{ alertmanager_config_dir }}"
+        state: directory
+
+    - name: Creates alertmanager data dir
+      file:
+        path: "{{ alertmanager_data_dir }}"
+        state: directory
+
+    - name: Archive local_alertmanager_conf_dir dir to prepare for upload
+      archive:
+        path: "{{local_alertmanager_conf_dir}}/*"
+        dest: "{{local_alertmanager_conf_archive}}"
+      delegate_to: localhost
+
+    - name: Upload alertmanager conf to remote
+      unarchive:
+        src: "{{ local_alertmanager_conf_archive }}"
+        dest: "{{ alertmanager_config_dir }}"
+
+    - name: Modify permissions to match user-group inside docker image
+      shell: chown -R "{{ ansible_user }}" "{{ alertmanager_config_dir }}"
+      become: true
+
+    - name: Start alertmanager container
+      docker_container:
+        name: "{{ alertmanager_container_name }}"
+        state: started
+        image: "{{ alertmanager_image_name }}"
+        pull: true
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        ports:
+          - "9093:9093"
+        volumes: "{{alertmanager_volumes}}"
+        command: "{{ alertmanager_start_args }}"
+        user: "{{ docker_user_id }}"

@@ -1,0 +1,27 @@
+---
+# setups up the machine with docker, updates apt cache
+- import_playbook: tasks/setup_machine.yml
+
+# Start docker network
+- import_playbook: tasks/dockernetwork.yml
+
+# Start grafana
+- import_playbook: tasks/start_grafana.yml
+
+# Start node_exporter
+- import_playbook: tasks/start_nodeexporter.yml
+
+# Start prometheus dc local
+- import_playbook: tasks/start_prometheus.yml
+
+# Start thanos
+- import_playbook: tasks/start_thanos.yml
+
+# Start promtail
+- import_playbook: tasks/start_promtail.yml
+
+# Start loki
+- import_playbook: tasks/start_loki.yml
+
+# Start alertmanager
+- import_playbook: tasks/start_alertmanager.yml

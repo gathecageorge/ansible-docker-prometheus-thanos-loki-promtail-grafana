@@ -1,0 +1,35 @@
+- name: Start promtail
+  hosts: "all"
+  gather_facts: true
+  tasks:
+    - name: Creates promtail config dir
+      file:
+        path: "{{ promtail_config_dir }}"
+        state: directory
+
+    - name: Archive local_promtail_conf_dir dir to prepare for upload
+      archive:
+        path: "{{local_promtail_conf_dir}}/*"
+        dest: "{{local_promtail_conf_archive}}"
+      delegate_to: localhost
+
+    - name: Upload promtail conf to remote
+      unarchive:
+        src: "{{ local_promtail_conf_archive }}"
+        dest: "{{ promtail_config_dir }}"
+
+    - name: Modify permissions to match user-group inside docker image
+      shell: chown -R "{{ ansible_user }}" "{{ promtail_config_dir }}"
+      become: true
+
+    - name: Start promtail container
+      docker_container:
+        name: "{{ promtail_container_name }}"
+        state: started
+        image: "{{ promtail_image_name }}"
+        pull: true
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        volumes: "{{promtail_volumes}}"
+        command: "{{ promtail_start_args }}"
+        user: "{{ docker_user_id }}"

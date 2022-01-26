@@ -1,0 +1,7 @@
+- name: Docker network setup
+  hosts: "all"
+  gather_facts: true
+  tasks:
+    - name: Create docker network
+      docker_network:
+        name: monitoring

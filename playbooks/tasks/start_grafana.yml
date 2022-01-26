@@ -1,0 +1,30 @@
+- name: Start grafana
+  hosts: "all"
+  gather_facts: true
+  tasks:
+    - name: Creates grafana dir
+      file:
+        path: "{{grafana_dir}}"
+        state: directory
+
+    - name: Modify permissions to match user-group inside docker image
+      shell: chown -R "{{ ansible_user }}" "{{ grafana_dir }}"
+      become: true
+
+    - name: Start grafana container
+      docker_container:
+        name: "{{ grafana_container_name }}"
+        state: started
+        image: "{{ grafana_image_name }}"
+        pull: true
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        ports:
+          - "3000:3000"
+        volumes: "{{grafana_volumes}}"
+        command: "{{ grafana_start_args }}"
+        env:
+          GF_SECURITY_ADMIN_USER: "admin"
+          GF_SECURITY_ADMIN_PASSWORD: "foobar"
+          GF_USERS_ALLOW_SIGN_UP: "false"
+        user: "{{ docker_user_id }}"

@@ -1,0 +1,98 @@
+- name: Start prometheus
+  hosts: "all"
+  gather_facts: true
+  tasks:
+    - name: Creates prometheus data dir
+      file:
+        path: "{{ prometheus_data_dir }}"
+        state: directory
+
+    - name: Creates prometheus config dir
+      file:
+        path: "{{ prometheus_config_dir }}"
+        state: directory
+
+    - name: Creates prometheus file_sd dir
+      file:
+        path: "{{ prometheus_file_sd_dir }}"
+        state: directory
+
+    - name: Modify permissions to match user-group inside docker image
+      shell: chown -R "{{ ansible_user }}" "{{ prometheus_data_dir }}"
+      shell: chown -R "{{ ansible_user }}" "{{ prometheus_config_dir }}"
+      become: true
+
+    - name: Create prometheus configuration file without remote write
+      copy:
+        dest: "{{ prometheus_config_dir }}/prometheus.yml"
+        content: |
+          global:
+            scrape_interval: {{ prometheus_scrape_intervals }}
+            external_labels:
+              cluster: '{{ inventory_hostname }}'
+
+          scrape_configs:
+            - job_name: '{{ inventory_hostname }}'
+              static_configs:
+                - targets: 
+                  - 'localhost:9090'
+                  labels:
+                    instance: 'prometheus'
+
+                - targets: 
+                  - 'nodeexporter:9100'
+                  labels:
+                    instance: 'node-exporter'
+
+                - targets:
+                  - 'thanos-store:10902'
+                  labels:
+                    instance: thanos-store
+
+                - targets:
+                  - 'thanos-receive:10902'
+                  labels:
+                    instance: thanos-receive
+
+                - targets:
+                  - 'thanos-query:10902'
+                  labels:
+                    instance: thanos-query
+
+                - targets:
+                  - 'thanos-compact:10902'
+                  labels:
+                    instance: thanos-compact
+
+                - targets: 
+                  - 'loki:3100'
+                  labels:
+                    instance: 'loki'
+
+                - targets: 
+                  - 'promtail:9080'
+                  labels:
+                    instance: 'promtail'
+
+                - targets: 
+                  - 'alertmanager:9093'
+                  labels:
+                    instance: 'alertmanager'
+
+              file_sd_configs:
+              - files:
+                - '/etc/prometheus/file_sd/*.yml'
+
+    - name: Start prometheus container
+      docker_container:
+        name: "{{ prometheus_container_name }}"
+        state: started
+        image: "{{ prometheus_image_name }}"
+        pull: true
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        ports:
+          - "9090:9090"
+        volumes: "{{prometheus_volumes}}"
+        command: "{{ prometheus_start_args }}"
+        user: "{{ docker_user_id }}"

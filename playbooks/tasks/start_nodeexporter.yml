@@ -1,0 +1,17 @@
+- name: Start nodeexporter
+  hosts: "all"
+  gather_facts: true
+  tasks:
+    - name: Start nodeexporter container
+      docker_container:
+        name: "{{ nodeexporter_container_name }}"
+        state: started
+        image: "{{ nodeexporter_image_name }}"
+        pull: true
+        restart_policy: unless-stopped
+        memory_swappiness: 0
+        network_mode: monitoring
+        ports:
+          - "9100:9100"
+        volumes: "{{nodeexporter_volumes}}"
+        command: "{{ nodeexporter_start_args }}"

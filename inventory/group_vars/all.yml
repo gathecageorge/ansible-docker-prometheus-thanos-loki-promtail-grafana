@@ -1,0 +1,190 @@
+##############################################
+# generic ansible config information
+##############################################
+ansible_user: "george"
+ansible_password: "gg"
+ansible_become_password: "gg"
+docker_user_id: "1000:1000"
+
+##############################################
+# remote host data directories & other settings
+##############################################
+home_dir: "/home/{{ ansible_user }}/ansible"
+docker_network: monitoring
+
+##############################################
+# nodeexporter settings
+##############################################
+nodeexporter_container_name: nodeexporter
+nodeexporter_image_name: prom/node-exporter:latest
+nodeexporter_volumes:
+  - /proc:/host/proc:ro
+  - /sys:/host/sys:ro
+  - /:/rootfs:ro
+nodeexporter_start_args: >
+  --path.procfs=/host/proc
+  --path.rootfs=/rootfs
+  --path.sysfs=/host/sys
+  --collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)
+
+
+##############################################
+# prometheus settings
+##############################################
+prometheus_container_name: prometheus
+prometheus_image_name: prom/prometheus:latest
+prometheus_start_args: >
+  --config.file=/etc/prometheus/prometheus.yml 
+  --log.level=warn 
+  --storage.tsdb.path=/prometheus 
+  --storage.tsdb.max-block-duration=2h 
+  --storage.tsdb.min-block-duration=2h
+prometheus_data_dir: "{{home_dir}}/prometheus_data"
+prometheus_config_dir: "{{home_dir}}/prometheus_config"
+prometheus_file_sd_dir: "{{prometheus_config_dir}}/file_sd"
+prometheus_scrape_intervals: "10s"
+prometheus_volumes:
+  - "{{prometheus_data_dir}}:/prometheus"
+  - "{{prometheus_config_dir}}:/etc/prometheus"
+
+
+##############################################
+# minio settings
+##############################################
+minio_image_name: minio/minio:latest
+minio_container_name: minio
+minio_user: EXAMPLEKEY
+minio_password: EXAMPLESECRET
+minio_data_dir: "{{home_dir}}/minio_data"
+
+##############################################
+# thanos settings
+##############################################
+thanos_image_name: thanosio/thanos:v0.24.0
+thanos_conf_dir: "{{home_dir}}/thanos_conf"
+thanos_data_dir: "{{home_dir}}/thanos_data"
+local_thanos_conf_dir: "{{inventory_dir}}/../thanos"
+local_thanos_conf_archive: "{{inventory_dir}}/../thanos.tar.gz"
+thanos_volumes:
+  - "{{thanos_conf_dir}}:/etc/thanos"
+  - "{{thanos_data_dir}}:/data"
+
+thanos_store_container_name: thanos-store
+thanos_store_start_args: >
+  store
+  --debug.name=thanos-store
+  --log.level=debug
+  --grpc-address=0.0.0.0:10091
+  --grpc-grace-period=1s
+  --http-address=0.0.0.0:10902
+  --http-grace-period=1s
+  --data-dir=/data/store
+  --objstore.config-file=/etc/thanos/bucket.yml
+
+thanos_receive_container_name: thanos-receive
+thanos_receive_start_args: >
+  receive
+  --debug.name=thanos-receive
+  --log.level=debug
+  --grpc-address=0.0.0.0:10091
+  --grpc-grace-period=1s
+  --http-address=0.0.0.0:10902
+  --http-grace-period=1s
+  --objstore.config-file=/etc/thanos/bucket.yml
+  --tsdb.path=/data/receive
+  --label='receive="true"'
+  --remote-write.address=0.0.0.0:10903
+
+thanos_sidecar_container_name: thanos-sidecar
+thanos_sidecar_start_args: >
+  sidecar
+  --debug.name=thanos-sidecar
+  --log.level=debug
+  --grpc-address=0.0.0.0:10091
+  --grpc-grace-period=1s
+  --http-address=0.0.0.0:10902
+  --http-grace-period=1s
+  --objstore.config-file=/etc/thanos/bucket.yml
+  --tsdb.path=/data/sidecar
+  --prometheus.url=http://prometheus:9090
+
+thanos_query_container_name: thanos-query
+thanos_query_start_args: >
+  query
+  --debug.name=thanos-query
+  --log.level=debug
+  --grpc-address=0.0.0.0:10091
+  --grpc-grace-period=1s
+  --http-address=0.0.0.0:10902
+  --http-grace-period=1s
+  --store=thanos-store:10091
+  --store=thanos-receive:10091
+  --store=thanos-sidecar:10091
+
+thanos_compact_container_name: thanos-compact
+thanos_compact_start_args: >
+  compact
+  --debug.name=thanos-compact
+  --log.level=debug
+  --http-address=0.0.0.0:10902
+  --http-grace-period=1s
+  --data-dir=/data/compactor
+  --objstore.config-file=/etc/thanos/bucket.yml
+  --wait
+
+
+##############################################
+# grafana settings
+##############################################ubuntu
+grafana_container_name: grafana
+grafana_image_name: grafana/grafana:latest
+grafana_start_args: ""
+grafana_dir: "{{ home_dir }}/grafana_data"
+grafana_volumes:
+  - "{{grafana_dir}}:/var/lib/grafana"
+
+
+##############################################
+# promtail settings
+##############################################
+promtail_image_name: grafana/promtail:latest
+promtail_container_name: promtail
+promtail_config_dir: "{{ home_dir }}/promtail_conf"
+local_promtail_conf_dir: "{{inventory_dir}}/../promtail"
+local_promtail_conf_archive: "{{inventory_dir}}/../promtail.tar.gz"
+promtail_start_args: >
+  -config.file=/mnt/config/config.yml
+promtail_volumes:
+  - "/var/log:/var/log"
+  - "{{promtail_config_dir}}:/mnt/config"
+
+
+##############################################
+# loki settings
+##############################################
+loki_image_name: grafana/loki:latest
+loki_container_name: loki
+loki_config_dir: "{{ home_dir }}/loki_conf"
+local_loki_conf_dir: "{{inventory_dir}}/../loki"
+local_loki_conf_archive: "{{inventory_dir}}/../loki.tar.gz"
+loki_start_args: >
+  -config.file=/mnt/config/config.yml
+loki_volumes:
+  - "{{loki_config_dir}}:/mnt/config"
+
+
+##############################################
+# alertmanager settings
+##############################################
+alertmanager_image_name: prom/alertmanager:latest
+alertmanager_container_name: alertmanager
+alertmanager_data_dir: "{{ home_dir }}/alertmanager_data"
+alertmanager_config_dir: "{{ home_dir }}/alertmanager_conf"
+local_alertmanager_conf_dir: "{{inventory_dir}}/../alertmanager"
+local_alertmanager_conf_archive: "{{inventory_dir}}/../alertmanager.tar.gz"
+alertmanager_start_args: >
+  --config.file=/mnt/config/config.yml
+  --storage.path=/data
+alertmanager_volumes:
+  - "{{alertmanager_config_dir}}:/mnt/config"
+  - "{{alertmanager_data_dir}}:/data"

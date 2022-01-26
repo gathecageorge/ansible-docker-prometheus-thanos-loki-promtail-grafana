@@ -1,0 +1,83 @@
+- name: Setup general tools used and update system
+  hosts: "all"
+  become: yes
+  gather_facts: true
+  vars:
+    docker_compose_version: "1.29.2"
+  tasks:
+    - name: Update apt cache
+      apt: update_cache=yes cache_valid_time=3600
+
+    - name: Upgrade all apt packages
+      apt: upgrade=dist
+
+    - name: Install dependencies
+      apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - software-properties-common
+        - gnupg-agent
+      
+    - name: Check reboot required if docker not installed
+      stat: path=/usr/bin/docker
+      register: reboot
+
+    - name: Add an apt signing key for Docker
+      when: reboot.stat.exists == False
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add apt repository for stable version
+      when: reboot.stat.exists == False
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Install Docker
+      when: reboot.stat.exists == False
+      apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - docker-ce
+        - docker-ce-cli 
+        - containerd.io
+        - python3-docker
+
+    - name: Add user to docker group
+      when: reboot.stat.exists == False
+      user:
+        name: "{{ansible_user}}"
+        group: docker
+
+    - name: Check is docker-compose installed
+      stat: path=/usr/local/bin/docker-compose
+      register: is_docker_compose_installed
+
+    - name: Download docker-compose {{ docker_compose_version }}
+      when: is_docker_compose_installed.stat.exists == False
+      get_url:
+        url : https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-Linux-x86_64
+        dest: ~/docker-compose
+        mode: '+x'
+
+    - name: Check docker-compose downloaded
+      stat: path=~/docker-compose
+      register: docker_compose
+
+    - name: Move docker-compose to /usr/local/bin/docker-compose
+      command: mv ~/docker-compose /usr/local/bin/docker-compose
+      when: docker_compose.stat.exists
+
+    - name: Unconditionally reboot the machine with all defaults when docker is installed
+      when: reboot.stat.exists == False
+      reboot:

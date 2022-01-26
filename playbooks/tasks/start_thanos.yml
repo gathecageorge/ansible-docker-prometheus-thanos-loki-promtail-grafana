@@ -1,0 +1,116 @@
+- name: Start thanos
+  hosts: "all"
+  gather_facts: true
+  tasks:
+    - name: Creates thanos data dir
+      file:
+        path: "{{thanos_data_dir}}"
+        state: directory
+    
+    - name: Creates minio data dir
+      file:
+        path: "{{minio_data_dir}}"
+        state: directory
+
+    - name: Creates thanos conf dir
+      file:
+        path: "{{thanos_conf_dir}}"
+        state: directory
+
+    - name: Archive local_thanos_conf_dir dir to prepare for upload
+      archive:
+        path: "{{local_thanos_conf_dir}}/*"
+        dest: "{{local_thanos_conf_archive}}"
+      delegate_to: localhost
+
+    - name: Upload thanos conf to remote
+      unarchive:
+        src: "{{ local_thanos_conf_archive }}"
+        dest: "{{ thanos_conf_dir }}"
+        
+    - name: Modify permissions to match user-group inside docker image
+      shell: chown -R "{{ ansible_user }}" "{{ thanos_data_dir }}" && chown -R "{{ ansible_user }}" "{{ thanos_conf_dir }}"
+      become: true
+
+    - name: Start minio s3 test container
+      docker_container:
+        name: "{{ minio_container_name }}"
+        state: started
+        image: "{{ minio_image_name }}"
+        pull: true
+        ports:
+          - "9001:9001"
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        volumes:
+          - "{{ minio_data_dir }}:/data"
+        entrypoint: "sh"
+        command: "-c 'mkdir -p /data/thanos && minio server /data --console-address :9001'"
+        env:
+          MINIO_ROOT_USER: "{{ minio_user }}"
+          MINIO_ROOT_PASSWORD: "{{ minio_password }}"
+        user: "{{ docker_user_id }}"
+
+    - name: Start thanos store container
+      docker_container:
+        name: "{{ thanos_store_container_name }}"
+        state: started
+        image: "{{ thanos_image_name }}"
+        pull: true
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        volumes: "{{thanos_volumes}}"
+        command: "{{ thanos_store_start_args }}"
+        user: "{{ docker_user_id }}"
+
+    - name: Start thanos sidecar container
+      docker_container:
+        name: "{{ thanos_sidecar_container_name }}"
+        state: started
+        image: "{{ thanos_image_name }}"
+        pull: true
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        volumes: "{{thanos_volumes}}"
+        command: "{{ thanos_sidecar_start_args }}"
+        user: "{{ docker_user_id }}"
+
+    - name: Start thanos receive container
+      docker_container:
+        name: "{{ thanos_receive_container_name }}"
+        state: started
+        image: "{{ thanos_image_name }}"
+        pull: true
+        ports:
+          - "10903:10903"
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        volumes: "{{thanos_volumes}}"
+        command: "{{ thanos_receive_start_args }}"
+        user: "{{ docker_user_id }}"
+
+    - name: Start thanos compact container
+      docker_container:
+        name: "{{ thanos_compact_container_name }}"
+        state: started
+        image: "{{ thanos_image_name }}"
+        pull: true
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        volumes: "{{thanos_volumes}}"
+        command: "{{ thanos_compact_start_args }}"
+        user: "{{ docker_user_id }}"
+
+    - name: Start thanos query container
+      docker_container:
+        name: "{{ thanos_query_container_name }}"
+        state: started
+        image: "{{ thanos_image_name }}"
+        pull: true
+        ports:
+          - "10902:10902"
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        volumes: "{{thanos_volumes}}"
+        command: "{{ thanos_query_start_args }}"
+        user: "{{ docker_user_id }}"

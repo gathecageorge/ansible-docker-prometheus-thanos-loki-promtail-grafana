@@ -1,0 +1,35 @@
+- name: Start loki
+  hosts: "all"
+  gather_facts: true
+  tasks:
+    - name: Creates loki config dir
+      file:
+        path: "{{ loki_config_dir }}"
+        state: directory
+
+    - name: Archive local_loki_conf_dir dir to prepare for upload
+      archive:
+        path: "{{local_loki_conf_dir}}/*"
+        dest: "{{local_loki_conf_archive}}"
+      delegate_to: localhost
+
+    - name: Upload loki conf to remote
+      unarchive:
+        src: "{{ local_loki_conf_archive }}"
+        dest: "{{ loki_config_dir }}"
+
+    - name: Modify permissions to match user-group inside docker image
+      shell: chown -R "{{ ansible_user }}" "{{ loki_config_dir }}"
+      become: true
+
+    - name: Start loki container
+      docker_container:
+        name: "{{ loki_container_name }}"
+        state: started
+        image: "{{ loki_image_name }}"
+        pull: true
+        restart_policy: unless-stopped
+        network_mode: monitoring
+        volumes: "{{loki_volumes}}"
+        command: "{{ loki_start_args }}"
+        user: "{{ docker_user_id }}"
