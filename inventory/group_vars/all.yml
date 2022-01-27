@@ -31,7 +31,7 @@ nodeexporter_start_args: >
 ##############################################
 # prometheus settings
 ##############################################
-prometheus_container_name: prometheus
+prometheus_container_name: "{{prometheus_name}}_prometheus"
 prometheus_image_name: prom/prometheus:latest
 prometheus_start_args: >
   --config.file=/etc/prometheus/prometheus.yml 
@@ -39,8 +39,15 @@ prometheus_start_args: >
   --storage.tsdb.path=/prometheus 
   --storage.tsdb.max-block-duration=2h 
   --storage.tsdb.min-block-duration=2h
-prometheus_data_dir: "{{home_dir}}/prometheus_data"
-prometheus_config_dir: "{{home_dir}}/prometheus_config"
+prometheus_rw_start_args: >
+  --enable-feature=remote-write-receiver
+  --config.file=/etc/prometheus/prometheus.yml 
+  --log.level=warn 
+  --storage.tsdb.path=/prometheus 
+  --storage.tsdb.max-block-duration=2h 
+  --storage.tsdb.min-block-duration=2h
+prometheus_data_dir: "{{home_dir}}/{{prometheus_name}}_prometheus_data"
+prometheus_config_dir: "{{home_dir}}/{{prometheus_name}}_prometheus_config"
 prometheus_file_sd_dir: "{{prometheus_config_dir}}/file_sd"
 prometheus_scrape_intervals: "10s"
 prometheus_volumes:

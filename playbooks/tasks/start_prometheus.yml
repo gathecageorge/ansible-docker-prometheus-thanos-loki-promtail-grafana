@@ -2,17 +2,17 @@
   hosts: "all"
   gather_facts: true
   tasks:
-    - name: Creates prometheus data dir
+    - name: Creates {{prometheus_container_name}} data dir
       file:
         path: "{{ prometheus_data_dir }}"
         state: directory
 
-    - name: Creates prometheus config dir
+    - name: Creates {{prometheus_container_name}} config dir
       file:
         path: "{{ prometheus_config_dir }}"
         state: directory
 
-    - name: Creates prometheus file_sd dir
+    - name: Creates {{prometheus_container_name}} file_sd dir
       file:
         path: "{{ prometheus_file_sd_dir }}"
         state: directory
@@ -29,10 +29,10 @@
           global:
             scrape_interval: {{ prometheus_scrape_intervals }}
             external_labels:
-              cluster: '{{ inventory_hostname }}'
+              cluster: '{{ inventory_hostname }}_{{prometheus_container_name}}'
 
           scrape_configs:
-            - job_name: '{{ inventory_hostname }}'
+            - job_name: '{{ inventory_hostname }}_{{prometheus_container_name}}'
               static_configs:
                 - targets: 
                   - 'localhost:9090'
@@ -83,7 +83,15 @@
               - files:
                 - '/etc/prometheus/file_sd/*.yml'
 
-    - name: Start prometheus container
+    - name: Add remote write if remote_write_url is set
+      blockinfile:
+        path: "{{ prometheus_config_dir }}/prometheus.yml"
+        block: |
+          remote_write:
+            - url: "{{ remote_write_url }}"
+      when: remote_write_url | default('') != ''
+
+    - name: Start {{prometheus_container_name}} container
       docker_container:
         name: "{{ prometheus_container_name }}"
         state: started
@@ -92,7 +100,7 @@
         restart_policy: unless-stopped
         network_mode: monitoring
         ports:
-          - "9090:9090"
+          - "{{ prometheus_port }}"
         volumes: "{{prometheus_volumes}}"
-        command: "{{ prometheus_start_args }}"
+        command: "{{ prometheus_rw_start_args if (enable_remote_receiver | default('false')) == 'true' else prometheus_start_args }}"
         user: "{{ docker_user_id }}"

@@ -11,8 +11,28 @@
 # Start node_exporter
 - import_playbook: tasks/start_nodeexporter.yml
 
-# Start prometheus dc local
+# Start prometheus base
 - import_playbook: tasks/start_prometheus.yml
+  vars:
+    prometheus_name: base
+    prometheus_port: "9090:9090"
+    remote_write_url: "http://middle_prometheus:9090/api/v1/write"
+
+# Start prometheus middle
+- import_playbook: tasks/start_prometheus.yml
+  vars:
+    prometheus_name: middle
+    prometheus_port: "9091:9090"
+    enable_remote_receiver: "true"
+    remote_write_url: "http://rw_prometheus:9090/api/v1/write"
+
+# Start prometheus remote write receiver and write to thanos receive
+- import_playbook: tasks/start_prometheus.yml
+  vars:
+    prometheus_name: rw
+    prometheus_port: "9092:9090"
+    enable_remote_receiver: "true"
+    remote_write_url: "http://thanos-receive:10903/api/v1/receive"
 
 # Start thanos
 - import_playbook: tasks/start_thanos.yml
@@ -24,4 +44,4 @@
 - import_playbook: tasks/start_loki.yml
 
 # Start alertmanager
-- import_playbook: tasks/start_alertmanager.yml
+#- import_playbook: tasks/start_alertmanager.yml
